@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmic Explorer</title>
+    <style>
+        :root {
+            --google-gray: rgba(32, 33, 36, 0.98);
+            --google-blue: #8ab4f8;
+            /* UPDATED: Background image set to the Titan repository image */
+            --bg-image: url('https://raw.githubusercontent.com/helloflygh/cosmos/main/titan-background.png');
+        }
+
+        body, html {
+            margin: 0; padding: 0; height: 100%;
+            font-family: 'Segoe UI', sans-serif;
+            /* Improved background styling for the new image */
+            background: #000 var(--bg-image) no-repeat center center fixed;
+            background-size: cover;
+            color: white; overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+
+        /* Top Bar: Tabs + Address Bar */
+        header {
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(15px);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .tab-bar {
+            display: flex; align-items: flex-end;
+            padding: 8px 10px 0; gap: 4px;
+        }
+
+        .tab {
+            height: 32px; padding: 0 12px 0 15px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #ccc; border-radius: 8px 8px 0 0;
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: 12px; cursor: pointer;
+            min-width: 120px; max-width: 180px;
+            border: 1px solid rgba(255,255,255,0.05); border-bottom: none;
+        }
+
+        .tab.active { background: var(--google-gray); color: white; height: 36px; }
+        .close-btn { margin-left: 10px; opacity: 0.6; }
+        .close-btn:hover { color: #ff6b6b; opacity: 1; }
+
+        .btn-add-tab {
+            background: transparent; border: none; color: white;
+            font-size: 20px; cursor: pointer; padding: 0 10px 5px; align-self: center;
+        }
+
+        /* Top Toolbar */
+        .top-toolbar {
+            background: var(--google-gray);
+            padding: 8px 15px;
+            display: flex; gap: 10px;
+        }
+
+        .top-search-container {
+            flex-grow: 1; background: #303134;
+            border-radius: 20px; display: flex;
+            padding: 2px 15px; border: 1px solid #5f6368;
+        }
+
+        .top-search-container input {
+            background: transparent; border: none; color: white;
+            width: 100%; padding: 8px; outline: none; font-size: 14px;
+        }
+
+        /* Viewports */
+        .viewport-container { flex-grow: 1; position: relative; }
+        .tab-content { display: none; width: 100%; height: 100%; position: absolute; }
+        .tab-content.active { display: block; }
+
+        /* Center UI */
+        .center-ui {
+            position: absolute; top: 40%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center; width: 100%; max-width: 600px;
+        }
+
+        /* GitHub Image Style - Kept the larger size from the previous request */
+        .logo-img {
+            max-width: 500px;
+            width: 90%;
+            height: auto;
+            margin-bottom: 20px;
+            filter: drop-shadow(0 0 20px rgba(0, 0, 0, 0.5));
+        }
+
+        .center-search-box {
+            background: #fff; border-radius: 24px;
+            display: flex; padding: 5px 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        .center-search-box input {
+            flex-grow: 1; border: none; outline: none;
+            padding: 12px; font-size: 16px; color: #202124;
+        }
+
+        iframe { width: 100%; height: 100%; border: none; background: white; display: none; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="tab-bar" id="tabBar">
+        <button class="btn-add-tab" onclick="createNewTab()">+</button>
+    </div>
+    <div class="top-toolbar">
+        <div class="top-search-container">
+            <input type="text" id="topOmniBar" value="cosmos://newtab" spellcheck="false">
+        </div>
+    </div>
+</header>
+
+<div class="viewport-container" id="viewportContainer"></div>
+
+<script>
+    let tabs = {}; 
+    let activeTabId = null;
+    const DEFAULT_URL = "cosmos://newtab";
+
+    function createNewTab() {
+        const id = 'tab-' + Date.now();
+        tabs[id] = { query: DEFAULT_URL, isNavigated: false };
+
+        const tabBtn = document.createElement('div');
+        tabBtn.className = 'tab';
+        tabBtn.id = 'btn-' + id;
+        tabBtn.onclick = (e) => { if(!e.target.classList.contains('close-btn')) switchTab(id); };
+        tabBtn.innerHTML = `<span class="tab-title">New Tab</span><span class="close-btn" onclick="closeTab('${id}')">×</span>`;
+        
+        const tabBar = document.getElementById('tabBar');
+        tabBar.insertBefore(tabBtn, tabBar.lastElementChild);
+
+        const content = document.createElement('div');
+        content.className = 'tab-content';
+        content.id = 'content-' + id;
+        content.innerHTML = `
+            <div class="center-ui" id="ui-${id}">
+                <img src="https://raw.githubusercontent.com/helloflygh/cosmos/main/cosmos.png" class="logo-img" alt="Cosmos Logo">
+                <div class="center-search-box">
+                    <input type="text" id="center-input-${id}" placeholder="Search the cosmos..." autocomplete="off">
+                </div>
+            </div>
+            <iframe id="frame-${id}" src="about:blank"></iframe>
+        `;
+        document.getElementById('viewportContainer').appendChild(content);
+
+        const centerInp = document.getElementById(`center-input-${id}`);
+        
+        centerInp.addEventListener('input', (e) => {
+            document.getElementById('topOmniBar').value = e.target.value || DEFAULT_URL;
+        });
+
+        centerInp.addEventListener('keypress', (e) => { 
+            if (e.key === 'Enter') navigate(id, e.target.value); 
+        });
+
+        switchTab(id);
+    }
+
+    function switchTab(id) {
+        activeTabId = id;
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        
+        document.getElementById('btn-' + id).classList.add('active');
+        document.getElementById('content-' + id).classList.add('active');
+        
+        document.getElementById('topOmniBar').value = tabs[id].query || DEFAULT_URL;
+    }
+
+    function navigate(id, query) {
+        if (!query || query === DEFAULT_URL) return;
+
+        const encodedData = btoa(query);
+        const iframeUrl = `https://example.com/${encodedData}`;
+        
+        tabs[id].query = query;
+        tabs[id].isNavigated = true;
+
+        document.getElementById(`ui-${id}`).style.display = 'none';
+        const frame = document.getElementById(`frame-${id}`);
+        frame.style.display = 'block';
+        frame.src = iframeUrl;
+        
+        document.getElementById('btn-' + id).querySelector('.tab-title').innerText = query.substring(0, 12);
+        document.getElementById('topOmniBar').value = query;
+    }
+
+    const topBar = document.getElementById('topOmniBar');
+    
+    topBar.addEventListener('focus', () => {
+        if (topBar.value === DEFAULT_URL) topBar.value = "";
+    });
+
+    topBar.addEventListener('blur', () => {
+        if (topBar.value === "") topBar.value = DEFAULT_URL;
+    });
+
+    topBar.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') navigate(activeTabId, e.target.value);
+    });
+
+    function closeTab(id) {
+        document.getElementById('btn-' + id).remove();
+        document.getElementById('content-' + id).remove();
+        delete tabs[id];
+        const remaining = Object.keys(tabs);
+        if (remaining.length > 0) switchTab(remaining[remaining.length - 1]);
+        else createNewTab();
+    }
+
+    createNewTab();
+</script>
+
+</body>
+</html>
